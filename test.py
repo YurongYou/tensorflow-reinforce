@@ -6,24 +6,16 @@ import tensorflow as tf
 import numpy as np
 import gym
 
-env_name = 'InvertedDoublePendulum-v1'
-# env_name = 'Hopper-v1'
+# env_name = 'InvertedPendulum-v1'
+env_name = 'Ant-v1'
 env = gym.make(env_name)
 
 sess      = tf.Session()
 optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
-writer    = tf.summary.FileWriter("./experiments/{}-experiment-1".format(env_name))
+# writer    = tf.summary.FileWriter("/tmp/{}-experiment-1".format(env_name))
 
 state_dim  = env.observation_space.shape[0]
 action_dim = env.action_space.shape[0]
-
-print("observation high & low")
-print(env.observation_space.high)
-print(env.observation_space.low)
-print("action high & low")
-print(env.action_space.high)
-print(env.action_space.low)
-print()
 
 # DDPG actor and critic architecture
 # Continuous control with deep reinforcement learning
@@ -89,53 +81,23 @@ pg_ddpg = DeepDeterministicPolicyGradient(sess,
                                           critic_network,
                                           state_dim,
                                           action_dim,
-                                          summary_writer=writer)
+                                          summary_writer=None)
 
-MAX_EPISODES = 10000
+
+path = './experiments/Ant-v1-experiment-443824'
+saver = tf.train.Saver()
+saver.restore(sess, path)
+
 MAX_STEPS    = 1000
-total_steps  = 0
 
-episode_history = deque(maxlen=100)
-for i_episode in range(MAX_EPISODES):
-
-  # initialize
-  state = env.reset()
-  for t in range(MAX_STEPS):
-    # env.render()
-    action = pg_ddpg.sampleAction(state[np.newaxis,:])
-    next_state, reward, done, _ = env.step(action[0])
-    pg_ddpg.storeExperience(state, action, reward, next_state, done)
-    pg_ddpg.updateModel()
-    state = next_state
-    total_steps = total_steps + 1
-    if done:
-      break
-
-  if i_episode % 200 == 0:
-
-    for i_eval in range(100):
-      total_rewards = 0
-      state = env.reset()
-      for t in range(MAX_STEPS):
-        # env.render()
-        action = pg_ddpg.sampleAction(state[np.newaxis,:], exploration=False)
-        next_state, reward, done, _ = env.step(action[0])
-        total_rewards += reward
-        state = next_state
-        if done: break
-
-      episode_history.append(total_rewards)
-      mean_rewards = np.mean(episode_history)
-
-    print("Episode {}".format(i_episode))
-    print("Total Step {}".format(total_steps))
-    print("Finished after {} timesteps".format(t+1))
-    print("Reward for this episode: {:.2f}".format(total_rewards))
-    print("Average reward for last 100 episodes: {:.2f}".format(mean_rewards))
-    # if mean_rewards >= 950.0: # for InvertedPendulum-v1
-    if mean_rewards >= 4800.0: # for InvertedDoublePendulum-v1
-      print("Environment {} solved after {} episodes".format(env_name, i_episode+1))
-      saver     = tf.train.Saver()
-      save_path = saver.save(sess, '/Users/youyurong/Desktop/saver_test.ckpt')
-      print("save model to " + save_path)
-      break
+state = env.reset()
+total_rewards = 0
+for t in range(MAX_STEPS):
+	env.render()
+	action = pg_ddpg.sampleAction(state[np.newaxis,:], exploration=False)
+	next_state, reward, done, _ = env.step(action[0])
+	total_rewards += reward
+	print(total_rewards)
+	state = next_state
+	if done: break
+print("Reward for this episode: {:.2f}".format(total_rewards))
