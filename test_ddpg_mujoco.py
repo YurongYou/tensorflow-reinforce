@@ -103,11 +103,12 @@ pg_ddpg = DeepDeterministicPolicyGradient(sess,
                                           action_dim,
                                           summary_writer=None)
 saver = tf.train.Saver()
-
+step_idx = []
+average_total_reward = []
 for kase in xrange(5):
   print("======== test case No.{} ========".format(kase))
-  step_idx = []
-  average_total_reward = []
+  step_idx.append([])
+  average_total_reward.append([])
   var_lists = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
   sess.run(tf.variables_initializer(var_lists))
   done = False
@@ -118,6 +119,7 @@ for kase in xrange(5):
       state = env.reset()
     action = pg_ddpg.sampleAction(state[np.newaxis,:])
     next_state, reward, done, _ = env.step(action[0])
+    pg_ddpg.storeExperience(state, action, reward, next_state, done)
     pg_ddpg.updateModel()
     state = next_state
 
@@ -138,9 +140,10 @@ for kase in xrange(5):
       mean_rewards = np.mean(episode_history)
       done = True
       print("Current Average Episodic Reward: {:.2f}".format(mean_rewards))
-      step_idx.append(step)
-      average_total_reward.append(mean_rewards)
+      step_idx[kase].append(step)
+      average_total_reward[kase].append(mean_rewards)
   save_path = saver.save(sess, "./experiments/{}-experiment-ddpg/model{}".format(env_name, kase))
   print("save model to " + save_path)
-  print(step_idx)
-  print(average_total_reward)
+for kase in xrange(5):
+  print(step_idx[kase])
+  print(average_total_reward[kase])

@@ -27,6 +27,7 @@ class DeepDeterministicPolicyGradient(object):
     self.session        = session
     self.optimizer      = optimizer
     self.summary_writer = summary_writer
+    self.summary_every  = summary_every
 
     # model components
     self.actor_network  = actor_network
