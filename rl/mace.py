@@ -111,6 +111,20 @@ class MixtureActorCriticExperts(object):
 
         target_MACE_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="target_MACE")
 
+        total_parameters = 0
+        for variable in target_MACE_variables:
+            # shape is an array of tf.Dimension
+            shape = variable.get_shape()
+            # print(shape)
+            # print(len(shape))
+            variable_parametes = 1
+            for dim in shape:
+                # print(dim)
+                variable_parametes *= dim.value
+            # print(variable_parametes)
+            total_parameters += variable_parametes
+        print("total number of parameters of the model: {}".format(total_parameters))
+
         with tf.name_scope("compute_gradient"):
             self.expert_chosen = tf.placeholder(tf.int32, (None, 2), name="expert_chosen")
             temp_diff =  future_rewards - tf.gather_nd(self.expertsValue, self.expert_chosen)

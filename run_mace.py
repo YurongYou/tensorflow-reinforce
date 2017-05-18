@@ -1,10 +1,21 @@
 from __future__ import print_function
 from collections import deque
-
-from rl.pg_mace import MixtureActorCriticExperts
+from rl.mace import MixtureActorCriticExperts
 import tensorflow as tf
 import numpy as np
 import gym
+import matplotlib.pyplot as plt
+from scipy.interpolate import spline
+import seaborn as sns
+sns.set_context("paper", font_scale=1.5)
+
+MAX_STEPS             = 50000
+MAX_STEPS_PEREPISODE  = 1000
+update_interval       = 1
+count_episode         = 0
+evaluate_interval     = 2000
+NUM_EXPERTS           = 1
+
 
 env_name = 'InvertedDoublePendulum-v1'
 env = gym.make(env_name)
@@ -21,7 +32,7 @@ print(env.action_space.low)
 print()
 
 sess      = tf.Session()
-optimizer = tf.train.AdamOptimizer(learning_rate=0.0001)
+optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
 writer    = tf.summary.FileWriter("./experiments/{}-experiment-2".format(env_name))
 
 state_dim  = env.observation_space.shape[0]
@@ -48,7 +59,7 @@ def common_net(states):
   return h2
 
 def expert_action_net(common, expert_num):
-  hidden = 128
+  hidden = 256
   W1 = tf.get_variable("action_W1", [common.shape[1], hidden],
                        initializer=tf.contrib.layers.xavier_initializer())
   b1 = tf.get_variable("action_b1", [hidden],
@@ -62,7 +73,7 @@ def expert_action_net(common, expert_num):
   return tf.reshape(a, [-1, expert_num, action_dim])
 
 def expert_value_net(common, expert_num):
-  hidden = 128
+  hidden = 256
   W1 = tf.get_variable("value_W1", [common.shape[1], hidden],
                        initializer=tf.contrib.layers.xavier_initializer())
   b1 = tf.get_variable("value_b1", [hidden],
@@ -75,40 +86,38 @@ def expert_value_net(common, expert_num):
   v = tf.matmul(h1, W2) + b2
   return v
 
-pg_mace = MixtureActorCriticExperts(sess,
+mace = MixtureActorCriticExperts(sess,
                                           optimizer,
                                           state_dim,
                                           action_dim,
                                           common_net,
                                           expert_action_net,
                                           expert_value_net,
-                                          expert_num=3,
+                                          expert_num=NUM_EXPERTS,
                                           exp_init_temp=20,
                                           exp_end_temp=0.025,
                                           exp_init_eta=0.9,
                                           exp_end_eta=0.2,
                                           anneal_iter=50000,
-                                          summary_writer=writer)
+                                          summary_writer=None)
 
-MAX_STEPS             = 1000000
-MAX_STEPS_PEREPISODE  = 1000
-update_interval       = 1
-count_episode         = 0
-evaluate_interval     = 10000
+
 
 saver                 = tf.train.Saver()
 
 state = env.reset()
 done = False
+step_idx = []
+average_total_reward = []
 for step in xrange(MAX_STEPS):
   if done :
     count_episode += 1
     state = env.reset()
-  action, actor_num, isExplore = pg_mace.sampleAction(state[np.newaxis,:])
+  action, actor_num, isExplore = mace.sampleAction(state[np.newaxis,:])
   next_state, reward, done, _ = env.step(action)
-  pg_mace.storeExperience(state, action, reward, next_state, actor_num, isExplore, done)
+  mace.storeExperience(state, action, reward, next_state, actor_num, isExplore, done)
   if step % update_interval == 0:
-    pg_mace.updateModel()
+    mace.updateModel()
   state = next_state
 
   if step % evaluate_interval == 0:
@@ -119,18 +128,25 @@ for step in xrange(MAX_STEPS):
       state = env.reset()
       done = False
       for t in range(MAX_STEPS_PEREPISODE):
-        action, actor_num, isExplore = pg_mace.sampleAction(state[np.newaxis,:], exploration=False)
+        action, actor_num, isExplore = mace.sampleAction(state[np.newaxis,:], exploration=False)
         next_state, reward, done, _ = env.step(action)
         total_rewards += reward
         state = next_state
         if done: break
       episode_history.append(total_rewards)
-      mean_rewards = np.mean(episode_history)
+    mean_rewards = np.mean(episode_history)
     done = True
     print("Current Average Episodic Reward: {:.2f}".format(mean_rewards))
     save_path = saver.save(sess, "./experiments/{}-experiment-2/model".format(env_name), global_step=step)
     print("save model to " + save_path)
-    # if mean_rewards >= 950.0: # for InvertedPendulum-v1
-    if mean_rewards >= 3800.0: # for InvertedDoublePendulum-v1
-      print("Environment {} solved after {} steps".format(env_name, step))
-      break
+    step_idx.append(step)
+    average_total_reward.append(mean_rewards)
+
+print(step_idx)
+print(average_total_reward)
+with sns.axes_style("ticks"):
+  plt.plot(step_idx, average_total_reward)
+  plt.xlabel("steps")
+  plt.ylabel("average_total_reward")
+  sns.despine()
+  plt.savefig("./experiments/{}-experiment-2/average_total_reward.pdf".format(env_name))

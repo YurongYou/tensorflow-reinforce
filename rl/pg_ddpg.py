@@ -90,7 +90,19 @@ class DeepDeterministicPolicyGradient(object):
     # get variable list
     actor_network_variables  = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="actor_network")
     critic_network_variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="critic_network")
-
+    total_parameters = 0
+    for variable in actor_network_variables + critic_network_variables:
+      # shape is an array of tf.Dimension
+      shape = variable.get_shape()
+      # print(shape)
+      # print(len(shape))
+      variable_parametes = 1
+      for dim in shape:
+        # print(dim)
+        variable_parametes *= dim.value
+      # print(variable_parametes)
+      total_parameters += variable_parametes
+    print("total number of parameters of the model: {}".format(total_parameters))
     # estimate rewards using the next state: r + argmax_a Q'(s_{t+1}, u'(a))
     with tf.name_scope("estimate_future_rewards"):
       self.next_states = tf.placeholder(tf.float32, (None, self.state_dim), name="next_states")
